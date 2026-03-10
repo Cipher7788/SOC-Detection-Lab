@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  splunk:
+    image: splunk/splunk:latest
+    container_name: splunk-soc-lab
+    environment:
+      SPLUNK_START_ARGS: '--accept-license'
+      SPLUNK_PASSWORD: 'SocLab@2026'
+      SPLUNK_LICENSE_URI: 'Free'
+    ports:
+      - "8000:8000"  # Web UI
+      - "8088:8088"  # HTTP Event Collector (HEC)
+      - "9997:9997"  # Splunk TCP input
+      - "514:514/udp"  # Syslog input
+    volumes:
+      - splunk_etc:/opt/splunk/etc
+      - splunk_var:/opt/splunk/var
+      - ./splunk/apps:/opt/splunk/etc/apps/soc_lab
+      - ./data-sources:/data-sources
+      - ./splunk/init:/tmp/init
+    networks:
+      - soc-lab-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Optional: Data generation service
+  data-generator:
+    build:
+      context: .
+      dockerfile: data-generator.dockerfile
+    container_name: soc-data-generator
+    depends_on:
+      - splunk
+    environment:
+      SPLUNK_HEC_URL: 'http://splunk:8088'
+      SPLUNK_HEC_TOKEN: 'REPLACE_WITH_HEC_TOKEN'
+    volumes:
+      - ./scripts:/scripts
+      - ./data-sources:/data-sources
+    networks:
+      - soc-lab-network
+    restart: on-failure
+
+volumes:
+  splunk_etc:
+    driver: local
+  splunk_var:
+    driver: local
+
+networks:
+  soc-lab-network:
+    driver: bridge
