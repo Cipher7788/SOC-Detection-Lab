@@ -1,1 +1,59 @@
-{\n  "description": "Brute Force Detection Rule",\n  "detection": {\n    "event_type": [\n      "authentication_failure"\n    ],\n    "threshold": 5,\n    "time_frame": "10m",\n    "condition": {\n      "all": [\n        {\n          "field": "source_ip",\n          "operator": "count",\n          "value": 5\n        }\n      ]\n    }\n  },\n  "actions": {\n    "notify": true,\n    "log": true\n  },\n  "enabled": true\n}
+{
+  "rule_name": "Brute Force Attack Detection",
+  "description": "Detects brute force login attacks by identifying multiple authentication failures from the same source IP within a short time window.",
+  "version": "1.0",
+  "severity": "high",
+  "mitre_attack": {
+    "tactic": "Credential Access",
+    "technique": "T1110",
+    "sub_technique": "T1110.001"
+  },
+  "detection": {
+    "event_types": ["authentication_failure", "login_failure"],
+    "windows_event_ids": [4625, 4771],
+    "linux_log_patterns": ["Failed password", "authentication failure"],
+    "threshold": {
+      "count": 5,
+      "time_frame": "10m",
+      "group_by": "source_ip"
+    },
+    "conditions": [
+      {
+        "field": "source_ip",
+        "operator": "count",
+        "value": 5,
+        "description": "Five or more failed logins from same source IP"
+      },
+      {
+        "field": "destination_user",
+        "operator": "exists",
+        "description": "Target account must be identified"
+      }
+    ]
+  },
+  "splunk_query": "index=security (EventID=4625 OR EventID=4771) | stats count by src_ip, user | where count >= 5 | sort -count",
+  "response_actions": [
+    {
+      "action": "alert",
+      "method": "email",
+      "priority": 1,
+      "description": "Notify SOC analyst immediately"
+    },
+    {
+      "action": "block_ip",
+      "method": "firewall_rule",
+      "priority": 2,
+      "description": "Automatically block offending source IP"
+    },
+    {
+      "action": "lock_account",
+      "method": "ad_policy",
+      "priority": 3,
+      "description": "Lock targeted user account after threshold"
+    }
+  ],
+  "false_positive_notes": "Consider whitelisting known vulnerability scanners and internal IT audit systems.",
+  "enabled": true,
+  "created_at": "2026-03-10T00:00:00Z",
+  "author": "Cipher7788"
+}
