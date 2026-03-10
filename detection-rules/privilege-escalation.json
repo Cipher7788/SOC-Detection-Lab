@@ -1,0 +1,3 @@
+{\n  
+  "title": "Privilege Escalation Detection Rules",\n  
+  "rules": [\n    {\n      "id": "rule_privilege_escalation_1",\n      "description": "Detect the use of SeDebugPrivilege",\n      "condition": {\n        "EventID": "4656",\n        "Privilege": "SeDebugPrivilege"\n      }\n    },\n    {\n      "id": "rule_privilege_escalation_2",\n      "description": "Detect the use of SeTcbPrivilege",\n      "condition": {\n        "EventID": "4656",\n        "Privilege": "SeTcbPrivilege"\n      }\n    }\n  ]\n}
