@@ -1,0 +1,6 @@
+domain,threat_type,confidence
+malware-c2.example.com,C2 Server,high
+phishing-kit.xyz,Phishing,high
+exploit-delivery.net,Exploit Kit,high
+data-exfil.ru,Exfiltration,high
+beacon.darkweb.io,C2 Beacon,high

@@ -1,0 +1,11 @@
+[]
+access = read : [ * ], write : [ admin, power ]
+
+[views]
+access = read : [ * ], write : [ admin, power ]
+
+[searches]
+access = read : [ * ], write : [ admin, power ]
+
+[dashboards]
+access = read : [ * ], write : [ admin, power ]

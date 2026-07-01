@@ -1,0 +1,88 @@
+{
+  "rule_name": "Lateral Movement Detection",
+  "description": "Detects lateral movement patterns including use of remote administration tools, pass-the-hash, and remote service creation.",
+  "version": "1.0",
+  "severity": "high",
+  "mitre_attack": {
+    "tactic": "Lateral Movement",
+    "technique": "T1021",
+    "sub_technique": "T1021.002"
+  },
+  "detection": {
+    "event_types": ["process_creation", "network_connection", "remote_service"],
+    "windows_event_ids": [4624, 4648, 4688, 4769, 7045],
+    "rules": [
+      {
+        "id": "lateral_move_1",
+        "description": "Suspicious lateral movement tool executed",
+        "condition": {
+          "EventID": "4688",
+          "process_name": ["psexec.exe", "psexesvc.exe", "wmic.exe", "winrs.exe", "at.exe"]
+        },
+        "severity": "high"
+      },
+      {
+        "id": "lateral_move_2",
+        "description": "Suspicious PowerShell remoting command",
+        "condition": {
+          "EventID": "4688",
+          "process_name": "powershell.exe",
+          "command_line_contains": ["Enter-PSSession", "Invoke-Command", "-ComputerName", "New-PSSession"]
+        },
+        "severity": "high"
+      },
+      {
+        "id": "lateral_move_3",
+        "description": "Pass-the-hash detected (logon type 3 with NTLM)",
+        "condition": {
+          "EventID": "4624",
+          "LogonType": "3",
+          "AuthenticationPackageName": "NTLM"
+        },
+        "severity": "critical"
+      },
+      {
+        "id": "lateral_move_4",
+        "description": "Remote service installation",
+        "condition": {
+          "EventID": "7045",
+          "ServiceType": "USER_MODE_SERVICE"
+        },
+        "severity": "high"
+      }
+    ],
+    "network_indicators": {
+      "ports": [135, 139, 445, 3389, 5985, 5986],
+      "protocols": ["SMB", "RDP", "WinRM"],
+      "threshold": {
+        "unique_destinations": 5,
+        "time_frame": "30m"
+      }
+    }
+  },
+  "splunk_query": "index=security EventID=4688 process_name IN (\"psexec.exe\",\"wmic.exe\",\"winrs.exe\",\"powershell.exe\") | table _time, host, user, process_name, cmdline | sort -_time",
+  "response_actions": [
+    {
+      "action": "alert",
+      "method": "siem_ticket",
+      "priority": 1,
+      "description": "Create high-priority incident ticket"
+    },
+    {
+      "action": "block_smb",
+      "method": "firewall_rule",
+      "priority": 2,
+      "description": "Block SMB traffic from source host"
+    },
+    {
+      "action": "isolate_host",
+      "method": "edr_policy",
+      "priority": 3,
+      "description": "Isolate affected endpoints from network"
+    }
+  ],
+  "false_positive_notes": "Whitelist approved system admin tools and known IT management servers performing legitimate remote administration.",
+  "enabled": true,
+  "created_at": "2026-03-10T00:00:00Z",
+  "author": "Cipher7788"
+}

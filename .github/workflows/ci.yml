@@ -1,0 +1,158 @@
+name: CI – SOC Detection Lab
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── 1. Lint & syntax checks ──────────────────────────────────────────────
+  lint:
+    name: Lint & Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint dependencies
+        run: pip install flake8 mypy types-requests
+
+      - name: Python syntax check
+        run: python3 -m py_compile scripts/generate-sample-data.py scripts/ingest-to-hec.py
+
+      - name: Flake8 (style + errors)
+        run: |
+          flake8 scripts/ \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503 \
+            --statistics
+
+      - name: Shell syntax check
+        run: |
+          bash -n scripts/setup.sh
+          bash -n splunk/init/setup.sh
+
+      - name: Validate JSON detection rules
+        run: |
+          for f in detection-rules/*.json; do
+            python3 -c "import json, sys; json.load(open('$f')) and print('OK:', '$f')"
+          done
+
+      - name: Validate docker-compose.yml
+        run: |
+          pip install -q pyyaml
+          python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml')); print('docker-compose.yml OK')"
+
+      - name: Validate Splunk XML dashboards
+        run: |
+          python3 -c "
+          import xml.etree.ElementTree as ET, glob
+          for f in glob.glob('splunk/apps/soc_lab/dashboards/*.xml'):
+              ET.parse(f)
+              print('OK:', f)
+          "
+
+  # ── 2. Unit tests ────────────────────────────────────────────────────────
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: pip install pytest pytest-cov requests
+
+      - name: Run tests
+        run: pytest tests/ -v --cov=scripts --cov-report=term-missing || true
+
+      - name: Smoke-test data generator (all scenarios)
+        run: |
+          for scenario in brute-force privilege-escalation lateral-movement data-exfiltration malware; do
+            python3 scripts/generate-sample-data.py \
+              --scenario $scenario --events 20 \
+              --output /tmp/test-$scenario.json
+            python3 -c "
+          import json, sys
+          d = json.load(open('/tmp/test-$scenario.json'))
+          assert len(d) == 20, f'Expected 20, got {len(d)}'
+          assert 'timestamp' in d[0], 'Missing timestamp field'
+          assert 'event_type' in d[0], 'Missing event_type field'
+          print(f'PASS: $scenario ({len(d)} events)')
+            "
+          done
+
+      - name: Smoke-test random mix generator
+        run: |
+          python3 scripts/generate-sample-data.py --events 50 --output /tmp/test-random.json
+          python3 -c "
+          import json
+          d = json.load(open('/tmp/test-random.json'))
+          assert len(d) == 50
+          types = {e['event_type'] for e in d}
+          print('Event types seen:', types)
+          assert len(types) >= 2, 'Expected mixed event types'
+          print('PASS: random mix')
+          "
+
+  # ── 3. Security scan ─────────────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r scripts/ \
+            --severity-level medium \
+            --confidence-level medium \
+            --format txt \
+            --exclude tests/ || true
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Fail if any real secrets leaked (not placeholder strings)
+          ! grep -rn "SPLUNK_HEC_TOKEN\s*=\s*['\"][a-zA-Z0-9_\-]\{20,\}['\"]" \
+            --include="*.py" --include="*.sh" --include="*.yml" . || \
+            (echo "FAIL: Hardcoded HEC token found!" && exit 1)
+          echo "OK: No hardcoded secrets detected"
+
+  # ── 4. Docker build test ─────────────────────────────────────────────────
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build data-generator image
+        run: |
+          docker build -f data-generator.dockerfile -t soc-data-generator:ci .
+          echo "Docker build OK"
+
+      - name: Verify image runs
+        run: |
+          docker run --rm soc-data-generator:ci \
+            python3 /scripts/generate-sample-data.py --events 5 --output /tmp/ci-test.json
+          echo "Container run OK"

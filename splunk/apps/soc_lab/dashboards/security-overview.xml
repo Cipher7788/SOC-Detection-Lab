@@ -1,0 +1,114 @@
+<form>
+  <label>SOC Detection Lab – Security Overview</label>
+  <description>Real-time overview of security events, alerts, and threat indicators.</description>
+
+  <!-- ── Row 1: KPI tiles ───────────────────────────────────────────── -->
+  <row>
+    <panel>
+      <title>Total Events (24h)</title>
+      <single>
+        <search>
+          <query>index=security earliest=-24h | stats count</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>High/Critical Alerts (24h)</title>
+      <single>
+        <search>
+          <query>index=security severity IN ("high","critical") earliest=-24h | stats count</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,10,50]</option>
+      </single>
+    </panel>
+    <panel>
+      <title>Failed Logins (1h)</title>
+      <single>
+        <search>
+          <query>index=security EventID=4625 earliest=-1h | stats count</query>
+          <earliest>-1h</earliest><latest>now</latest>
+        </search>
+      </single>
+    </panel>
+    <panel>
+      <title>Unique Attacking IPs (24h)</title>
+      <single>
+        <search>
+          <query>index=security EventID=4625 earliest=-24h | stats dc(src_ip)</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+      </single>
+    </panel>
+  </row>
+
+  <!-- ── Row 2: Event timeline ─────────────────────────────────────── -->
+  <row>
+    <panel>
+      <title>Security Events Over Time</title>
+      <chart>
+        <search>
+          <query>index=security earliest=-24h | timechart count by event_type</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.axisTitleX.text">Time</option>
+        <option name="charting.axisTitleY.text">Event Count</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- ── Row 3: Top threats + Top attacking IPs ────────────────────── -->
+  <row>
+    <panel>
+      <title>Top Threat Types</title>
+      <chart>
+        <search>
+          <query>index=security earliest=-24h | stats count by event_type | sort -count | head 10</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+        <option name="charting.chart">pie</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Top Attacking Source IPs</title>
+      <table>
+        <search>
+          <query>index=security EventID=4625 earliest=-24h | stats count as attempts by src_ip | sort -attempts | head 10</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+  <!-- ── Row 4: Recent alerts ──────────────────────────────────────── -->
+  <row>
+    <panel>
+      <title>Recent High/Critical Events</title>
+      <table>
+        <search>
+          <query>index=security severity IN ("high","critical") earliest=-1h | table _time, host, user, event_type, severity, src_ip | sort -_time | head 20</query>
+          <earliest>-1h</earliest><latest>now</latest>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+  <!-- ── Row 5: Suspicious processes ──────────────────────────────── -->
+  <row>
+    <panel>
+      <title>Suspicious Process Executions (24h)</title>
+      <table>
+        <search>
+          <query>index=security EventID=4688 process_name IN ("psexec.exe","wmic.exe","mimikatz.exe","meterpreter.exe","powershell.exe","nc.exe","ncat.exe","cobalt_strike.exe") earliest=-24h | table _time, host, user, process_name, cmdline | sort -_time | head 25</query>
+          <earliest>-24h</earliest><latest>now</latest>
+        </search>
+      </table>
+    </panel>
+  </row>
+
+</form>

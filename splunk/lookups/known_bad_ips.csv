@@ -1,0 +1,10 @@
+ip,threat_type,confidence,source
+45.33.32.156,C2 Server,high,ThreatIntel
+185.220.101.5,Tor Exit Node,high,ThreatIntel
+94.102.49.190,Malware Distribution,high,ThreatIntel
+198.51.100.42,Scanning/Recon,medium,ThreatIntel
+203.0.113.17,Phishing,high,ThreatIntel
+91.108.56.12,Botnet,high,ThreatIntel
+104.244.42.1,Spam,medium,ThreatIntel
+51.15.0.1,C2 Server,high,ThreatIntel
+77.109.139.87,Exploit Kit,high,ThreatIntel

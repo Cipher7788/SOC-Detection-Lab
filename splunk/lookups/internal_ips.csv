@@ -1,0 +1,10 @@
+ip,description,department
+192.168.1.0/24,Internal LAN,General
+10.0.0.0/24,Server subnet,IT Infrastructure
+172.16.0.0/16,Management network,IT Security
+192.168.1.10,Workstation-010,HR
+192.168.1.11,Workstation-011,Finance
+192.168.1.20,Workstation-020,IT
+10.0.0.5,Server-01,Active Directory
+10.0.0.6,Server-02,File Server
+10.0.0.7,Server-03,Web Server

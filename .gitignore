@@ -1,0 +1,45 @@
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.env
+.venv
+venv/
+env/
+
+# ── Secrets / credentials ─────────────────────────────────────────────────────
+# NOTE: .env.example IS committed; .env is NOT
+.env
+*.key
+*.pem
+*.crt
+
+# ── Generated data & output ───────────────────────────────────────────────────
+output/
+data-sources/logs/*.json
+data-sources/network/*.csv
+data-sources/windows/*.csv
+sample_security_events.json
+
+# ── Splunk runtime data (Docker volumes) ─────────────────────────────────────
+splunk/var/
+splunk/etc/
+
+# ── OS artefacts ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# ── Editor / IDE ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.pytest_cache/

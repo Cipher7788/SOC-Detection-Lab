@@ -1,0 +1,78 @@
+{
+  "rule_name": "Privilege Escalation Detection",
+  "description": "Detects privilege escalation events by monitoring sensitive Windows privileges and unusual account changes.",
+  "version": "1.0",
+  "severity": "critical",
+  "mitre_attack": {
+    "tactic": "Privilege Escalation",
+    "technique": "T1078",
+    "sub_technique": "T1078.002"
+  },
+  "detection": {
+    "event_types": ["privilege_use", "account_change", "token_manipulation"],
+    "windows_event_ids": [4656, 4672, 4673, 4674, 4688, 4728, 4732, 4756],
+    "rules": [
+      {
+        "id": "priv_esc_1",
+        "description": "Sensitive privilege assigned to new logon (SeDebugPrivilege)",
+        "condition": {
+          "EventID": "4672",
+          "Privilege": "SeDebugPrivilege"
+        },
+        "severity": "critical"
+      },
+      {
+        "id": "priv_esc_2",
+        "description": "Act as part of operating system privilege used (SeTcbPrivilege)",
+        "condition": {
+          "EventID": "4672",
+          "Privilege": "SeTcbPrivilege"
+        },
+        "severity": "critical"
+      },
+      {
+        "id": "priv_esc_3",
+        "description": "User added to privileged group (Domain Admins / Administrators)",
+        "condition": {
+          "EventID": ["4728", "4732", "4756"],
+          "TargetGroup": ["Domain Admins", "Administrators", "Enterprise Admins"]
+        },
+        "severity": "high"
+      },
+      {
+        "id": "priv_esc_4",
+        "description": "New process created with elevated token",
+        "condition": {
+          "EventID": "4688",
+          "TokenElevationType": "%%1937"
+        },
+        "severity": "high"
+      }
+    ]
+  },
+  "splunk_query": "index=security (EventID=4672 OR EventID=4673 OR EventID=4728 OR EventID=4732) | table _time, user, Privilege, TargetUserName, TargetDomainName | sort -_time",
+  "response_actions": [
+    {
+      "action": "alert",
+      "method": "pagerduty",
+      "priority": 1,
+      "description": "Page on-call analyst immediately"
+    },
+    {
+      "action": "capture_memory",
+      "method": "forensic_tool",
+      "priority": 2,
+      "description": "Capture memory dump of affected system"
+    },
+    {
+      "action": "isolate_host",
+      "method": "edr_policy",
+      "priority": 3,
+      "description": "Network-isolate the affected endpoint"
+    }
+  ],
+  "false_positive_notes": "Exclude known admin accounts performing scheduled privilege use during maintenance windows.",
+  "enabled": true,
+  "created_at": "2026-03-10T00:00:00Z",
+  "author": "Cipher7788"
+}

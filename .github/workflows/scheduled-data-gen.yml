@@ -1,0 +1,43 @@
+name: Scheduled Data Generation (Self-hosted)
+
+# Runs every 6 hours on a self-hosted runner that has Docker running.
+# Generates fresh events and injects them into your running Splunk lab.
+# Only useful when the lab is running locally — disabled by default.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # Every 6 hours
+  workflow_dispatch:          # Manual trigger from GitHub UI
+
+jobs:
+  generate-and-ingest:
+    name: Generate & Ingest Events
+    runs-on: self-hosted      # Requires a self-hosted runner with lab running
+    if: github.event_name == 'workflow_dispatch'   # Disable auto-run by default
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Generate brute-force events
+        run: |
+          python3 scripts/generate-sample-data.py \
+            --scenario brute-force --events 50 \
+            --send-hec \
+            --hec-url "${{ secrets.SPLUNK_HEC_URL }}" \
+            --hec-token "${{ secrets.SPLUNK_HEC_TOKEN }}"
+
+      - name: Generate lateral movement events
+        run: |
+          python3 scripts/generate-sample-data.py \
+            --scenario lateral-movement --events 20 \
+            --send-hec \
+            --hec-url "${{ secrets.SPLUNK_HEC_URL }}" \
+            --hec-token "${{ secrets.SPLUNK_HEC_TOKEN }}"
