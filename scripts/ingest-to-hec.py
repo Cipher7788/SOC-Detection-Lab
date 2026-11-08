@@ -15,43 +15,11 @@ Usage
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
-from typing import List
 
 
-def send_events(events: List[dict], hec_url: str, hec_token: str, batch_size: int = 100) -> bool:
-    try:
-        import requests  # type: ignore
-    except ImportError:
-        print("[!] 'requests' not installed. Run: pip3 install requests", file=sys.stderr)
-        return False
-
-    headers = {"Authorization": f"Splunk {hec_token}", "Content-Type": "application/json"}
-    endpoint = hec_url.rstrip("/") + "/services/collector"
-    total_sent = 0
-
-    for i in range(0, len(events), batch_size):
-        chunk = events[i : i + batch_size]
-        payload = "\n".join(
-            json.dumps({"sourcetype": "json", "index": "security", "event": ev})
-            for ev in chunk
-        )
-        try:
-            resp = requests.post(endpoint, data=payload, headers=headers, timeout=15)
-            if resp.status_code == 200:
-                total_sent += len(chunk)
-                print(f"[+] Sent {total_sent}/{len(events)} events")
-            else:
-                print(f"[!] HEC error {resp.status_code}: {resp.text}", file=sys.stderr)
-                return False
-        except requests.RequestException as exc:
-            print(f"[!] Connection error: {exc}", file=sys.stderr)
-            return False
-
-    print(f"\n[✓] All {total_sent} events ingested successfully.")
-    return True
+from hec_client import send_events, load_events
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,7 +28,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hec-url",   default=os.environ.get("SPLUNK_HEC_URL",   "http://localhost:8088"))
     parser.add_argument("--hec-token", default=os.environ.get("SPLUNK_HEC_TOKEN", ""))
     parser.add_argument("--batch",     type=int, default=100, metavar="N", help="Events per HEC batch")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.batch < 1:
+        parser.error("--batch must be positive")
+    return args
 
 
 def main() -> int:
@@ -71,9 +42,8 @@ def main() -> int:
         return 1
 
     try:
-        with open(args.file, encoding="utf-8") as fh:
-            events = json.load(fh)
-    except (OSError, json.JSONDecodeError) as exc:
+        events = load_events(args.file)
+    except (OSError, ValueError) as exc:
         print(f"[!] Could not load events file: {exc}", file=sys.stderr)
         return 1
 

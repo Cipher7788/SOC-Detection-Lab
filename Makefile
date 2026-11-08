@@ -3,6 +3,9 @@
 # Convenience targets for common lab operations
 # =============================================================================
 
+-include .env
+export SPLUNK_HEC_TOKEN SPLUNK_PASSWORD ALERT_WEBHOOK_URL
+
 PYTHON     := python3
 PIP        := pip3
 COMPOSE    := $(shell command -v docker-compose 2>/dev/null || echo "docker compose")
@@ -21,7 +24,7 @@ help:
 	@echo "  make down        Stop Docker Compose stack"
 	@echo "  make logs        Tail Splunk container logs"
 	@echo ""
-	@echo "  make test        Run all 118 unit tests"
+	@echo "  make test        Run all unit tests"
 	@echo "  make lint        Run flake8 + bash syntax checks"
 	@echo "  make security    Run Bandit security scan"
 	@echo ""
@@ -69,7 +72,6 @@ lint:
 	flake8 scripts/ --max-line-length=120 --extend-ignore=E203,W503 --statistics
 	@echo "[*] Checking shell syntax..."
 	bash -n scripts/setup.sh && echo "  OK: scripts/setup.sh"
-	bash -n splunk/init/setup.sh && echo "  OK: splunk/init/setup.sh"
 	@echo "[*] Validating JSON rules..."
 	@for f in detection-rules/*.json; do \
 		$(PYTHON) -c "import json; json.load(open('$$f')); print('  OK:', '$$f')"; \
@@ -78,7 +80,7 @@ lint:
 
 security:
 	@echo "[*] Running security scan..."
-	bandit -r scripts/ --severity-level medium --confidence-level medium --format txt || true
+	bandit -r scripts/ --severity-level medium --confidence-level medium --format txt
 
 # ── Data generation ──────────────────────────────────────────────────────────
 generate:
@@ -100,14 +102,14 @@ ingest:
 	$(PYTHON) scripts/ingest-to-hec.py \
 		--file data-sources/logs/generated-events.json \
 		--hec-url $(HEC_URL) \
-		--hec-token $(HEC_TOKEN)
+		--hec-token "$(HEC_TOKEN)"
 
 ingest-all:
 	@echo "[*] Generating and ingesting all 5 scenarios..."
-	@for s in brute-force privilege-escalation lateral-movement data-exfiltration malware; do \
+	@set -e; for s in brute-force privilege-escalation lateral-movement data-exfiltration malware; do \
 		$(PYTHON) scripts/generate-sample-data.py \
 			--scenario $$s --events 50 \
-			--send-hec --hec-url $(HEC_URL) --hec-token $(HEC_TOKEN); \
+			--send-hec --hec-url $(HEC_URL) --hec-token "$(HEC_TOKEN)"; \
 	done
 
 # ── Notifications ─────────────────────────────────────────────────────────────

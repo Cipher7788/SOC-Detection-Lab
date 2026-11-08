@@ -196,7 +196,7 @@ def parse_args() -> argparse.Namespace:
         epilog=__doc__,
     )
     parser.add_argument("--provider",    required=True, choices=["slack", "teams", "generic"])
-    parser.add_argument("--webhook-url", required=True,
+    parser.add_argument("--webhook-url",
                         default=os.environ.get("ALERT_WEBHOOK_URL"),
                         help="Webhook URL (or set $ALERT_WEBHOOK_URL)")
     parser.add_argument("--alert-name",  required=True)
@@ -207,7 +207,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--details",     default=None)
     parser.add_argument("--dry-run",     action="store_true",
                         help="Print payload without sending")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.dry_run and not args.webhook_url:
+        parser.error("--webhook-url or $ALERT_WEBHOOK_URL is required")
+    return args
 
 
 def main() -> int:

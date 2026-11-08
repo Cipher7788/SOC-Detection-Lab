@@ -14,6 +14,9 @@ jobs:
     name: Generate & Ingest Events
     runs-on: self-hosted      # Requires a self-hosted runner with lab running
     if: github.event_name == 'workflow_dispatch'   # Disable auto-run by default
+    env:
+      SPLUNK_HEC_URL: ${{ secrets.SPLUNK_HEC_URL }}
+      SPLUNK_HEC_TOKEN: ${{ secrets.SPLUNK_HEC_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,14 +33,10 @@ jobs:
         run: |
           python3 scripts/generate-sample-data.py \
             --scenario brute-force --events 50 \
-            --send-hec \
-            --hec-url "${{ secrets.SPLUNK_HEC_URL }}" \
-            --hec-token "${{ secrets.SPLUNK_HEC_TOKEN }}"
+            --send-hec
 
       - name: Generate lateral movement events
         run: |
           python3 scripts/generate-sample-data.py \
             --scenario lateral-movement --events 20 \
-            --send-hec \
-            --hec-url "${{ secrets.SPLUNK_HEC_URL }}" \
-            --hec-token "${{ secrets.SPLUNK_HEC_TOKEN }}"
+            --send-hec

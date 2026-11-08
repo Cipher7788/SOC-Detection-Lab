@@ -1,414 +1,79 @@
-# ⚙️ Configuration Guide
+# Configuration
 
-Comprehensive guide to configuring your SOC Detection Lab.
+## Docker and credentials
 
-## Data Input Configuration
+Compose requires `SPLUNK_PASSWORD` and `SPLUNK_HEC_TOKEN` from `.env`.
+`SPLUNK_IMAGE` optionally selects a specific image tag; the example uses latest.
+Existing `.env` files are preserved by setup. Existing Splunk volumes may retain
+the previous admin password; changing the environment does not reset it.
 
-### 1. HTTP Event Collector (HEC)
+The official Splunk image reads `splunk/defaults.yml` and provisions HEC using
+`SPLUNK_HEC_TOKEN`. HEC uses HTTP on port 8088 inside this local lab; published
+ports bind to localhost. Compose includes the license and general-terms startup
+flags required by current images. Startup uses the image's trial license rather
+than forcing Free mode, which does not support scheduled alerting.
 
-HEC is the primary method for ingesting JSON data into Splunk.
+## App layout and indexes
 
-**Configuration File**: `splunk/apps/soc_lab/default/inputs.conf`
+`splunk/apps/soc_lab` mounts directly at `/opt/splunk/etc/apps/soc_lab`.
+`default/indexes.conf` creates `security`, `network` and `alerts` at startup.
+Views belong in `default/data/ui/views`; navigation is in `default/data/ui/nav`.
+Lookups mount inside the app's `lookups` directory. App source mounts read-only;
+edit tracked configuration on the host and restart Splunk to apply changes.
+For alert actions, edit the tracked saved searches, or use a separate writable
+deployment of the app if you need to save UI changes.
 
-```ini
-[http://soc_lab_hec]
-disabled = false
-port = 8088
-enableSSL = false
-token = REPLACE_WITH_HEC_TOKEN
+## Event ingestion
 
-# Receive data without authentication (for lab only)
-[http]
-disabled = false
-port = 8088
-```
+The default generator sends events once via HEC, with sourcetype `soc_lab_json`,
+index `security`, event host metadata, and numeric epoch timestamps. Connection
+and HEC errors return a nonzero exit code. HTTP 503 responses have bounded retries.
+Requests that time out are not retried automatically, to avoid duplicate ingestion.
 
-**Using HEC with Python**:
-```python
-import requests
-import json
+For host Python workflows:
 
-url = "http://localhost:8088/services/collector"
-headers = {"Authorization": f"Splunk YOUR_HEC_TOKEN"}
-event = {
-    "time": time.time(),
-    "source": "app_name",
-    "sourcetype": "json",
-    "event": {
-        "user": "admin",
-        "action": "login",
-        "status": "success"
-    }
-}
-response = requests.post(url, json=event, headers=headers)
-```
-
-### 2. Syslog Input
-
-For Unix/Linux systems sending syslog format.
-
-**Configuration**:
-```ini
-[udp://514]
-disabled = false
-connection_host = dns
-sourcetype = syslog
-index = main
-```
-
-**Test Syslog**:
 ```bash
-echo "<14>Feb 10 10:59:30 myhost INFO Test event" | nc -u -w0 localhost 514
+python3 -m pip install -r requirements.txt
+python3 scripts/generate-sample-data.py --scenario malware --events 50 \
+  --output data-sources/logs/malware.json
+# Set SPLUNK_HEC_TOKEN in your shell, or supply --hec-token.
+python3 scripts/ingest-to-hec.py --file data-sources/logs/malware.json
 ```
 
-### 3. TCP Input
+The ingestion helper accepts JSON arrays and JSON Lines. To use file monitoring
+instead of HEC, generate `--format jsonl --output data-sources/logs/events.jsonl`.
+Only `.jsonl` files are monitored under `logs`, so array files do not get split
+into invalid events or ingest twice. Windows and network CSV monitors are optional.
+Generated network events remain in `security`; the exfiltration search includes
+both `security` and `network`. CSV network events need the same fields, including
+`event_type=network_connection`, `src_ip`, `dest_ip`, and `bytes_out`.
 
-For legacy systems using TCP connections.
+Port 9997 accepts Splunk forwarder traffic; UDP syslog is exposed on localhost:5514.
+The generator only creates synthetic events; no attack tools execute.
 
-**Configuration**:
-```ini
-[tcp://9997]
-disabled = false
-connection_host = ip
-sourcetype = log
-index = security
+## Alerts and notifications
+
+Five scheduled searches are enabled, owned by admin and tracked as triggered
+alerts when they return results. Email and webhook actions have no placeholder
+destinations. Configure destinations and SMTP in Splunk before enabling those
+actions. The `alerts` index is reserved; searches do not automatically write to it.
+
+`scripts/notify-webhook.py` is a separate command-line helper, not an installed
+Splunk custom alert action. It supports Slack, Teams MessageCard and generic JSON
+payloads. Generic JSON is not a provider-specific PagerDuty/Discord API adapter.
+Pass `--webhook-url` or set `ALERT_WEBHOOK_URL`; use `--dry-run` to preview.
+
+## Development checks
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest tests -q
+python3 -m flake8 scripts --max-line-length=120 --extend-ignore=E203,W503
+python3 -m bandit -r scripts --severity-level medium --confidence-level medium
+bash -n scripts/setup.sh
+docker compose config --quiet
 ```
 
-### 4. File Monitoring
-
-Monitor local log files.
-
-**Configuration**:
-```ini
-[monitor:///data-sources/*.csv]
-disabled = false
-sourcetype = csv
-index = security
-```
-
-## Field Extraction Configuration
-
-### Props.conf
-
-Define how Splunk parses and extracts fields.
-
-```ini
-[windows_events]
-TIMESTAMP_FIELDS = EventTime
-TIME_PREFIX = EventTime=
-TIME_FORMAT = %Y-%m-%d %H:%M:%S
-TRANSFORMS-routing = route_to_security_index
-EVAL-severity = case(
-    EventID=4625, "high",
-    EventID=4720, "medium",
-    1=1, "low"
-)
-
-[linux_syslog]
-TIMESTAMP_FIELDS = timestamp
-TIME_FORMAT = %b %d %H:%M:%S
-TRUNCATE = 10000
-TRANSFORMS-enrichment = add_host_info
-
-[network_traffic]
-TIMESTAMP_FIELDS = timestamp
-TIME_FORMAT = %Y-%m-%d %H:%M:%S.%3N
-SHOULD_LINEMERGE = false
-LINE_BREAKER = ([\r\n]+)
-EVAL-is_suspicious = case(
-    dest_port > 50000, 1,
-    bytes > 100000000, 1,
-    1=1, 0
-)
-```
-
-### Transforms.conf
-
-Transform and enrich data.
-
-```ini
-[route_to_security_index]
-REGEX = .
-DEST_KEY = _MetaData:Index
-FORMAT = security
-
-[add_host_info]
-filename = enrichment.csv
-match_type = WILDCARD(hostname)
-```
-
-## Detection Rule Configuration
-
-### Brute Force Detection
-
-**Search Query**:
-```spl
-index=security EventID=4625 
-| stats count as failed_logins by src_ip, user, dest_ip 
-| where failed_logins > 10 
-| eval severity="high", rule_name="Brute Force Detected"
-```
-
-**Alert Configuration** (savedsearches.conf):
-```ini
-[Brute Force Detection]
-search = index=security EventID=4625 | stats count as failed_logins by src_ip, user, dest_ip | where failed_logins > 10
-dispatch.earliest_time = -5m@m
-dispatch.latest_time = now
-cron_schedule = */5 * * * *
-alert_type = always
-alert.severity = high
-actions = email, webhook
-alert.email.to = security@company.com
-alert.webhook.url = https://hooks.slack.com/services/YOUR/WEBHOOK
-```
-
-### Privilege Escalation Detection
-
-```spl
-index=security EventID=4688 
-| where NewProcessName="*powershell.exe" OR NewProcessName="*cmd.exe" 
-| stats count by User, ComputerName, CommandLine 
-| where count > 5
-```
-
-**Alert Configuration**:
-```ini
-[Privilege Escalation Detection]
-search = index=security EventID=4688 | where NewProcessName="*powershell.exe" OR NewProcessName="*cmd.exe" | stats count by User, ComputerName, CommandLine | where count > 5
-dispatch.earliest_time = -10m
-dispatch.latest_time = now
-cron_schedule = 0 * * * *
-alert_type = always
-alert.severity = critical
-actions = email, webhook, create_ticket
-```
-
-### Lateral Movement Detection
-
-```spl
-index=security (EventID=4624 OR EventID=4672) 
-| where LogonType=3 
-| stats count as remote_logins by src_ip, dest_ip, user 
-| where remote_logins > 5 AND src_ip != dest_ip
-```
-
-### Data Exfiltration Detection
-
-```spl
-index=network bytes_out > 1000000000 
-| stats sum(bytes_out) as total_bytes by src_ip, dest_ip, user, dest_port 
-| where total_bytes > 5000000000 
-| eval severity="high"
-```
-
-### Malware Detection
-
-```spl
-index=security (EventID=11 OR EventID=7) 
-| where CommandLine="*powershell*" OR CommandLine="*cmd*" 
-| eval severity="critical"
-```
-
-## Dashboard Configuration
-
-### Creating a Custom Dashboard
-
-**File**: `splunk/apps/soc_lab/dashboards/custom-security.xml`
-
-```xml
-<form>
-  <label>Custom Security Dashboard</label>
-  
-  <row>
-    <panel>
-      <title>Event Count Over Time</title>
-      <chart>
-        <search>
-          <query>index=security | timechart count by event_type</query>
-          <earliest>-24h@h</earliest>
-          <latest>now</latest>
-        </search>
-        <option name="charting.chart">column</option>
-        <option name="charting.axisTitleX.text">Time</option>
-        <option name="charting.axisTitleY.text">Count</option>
-      </chart>
-    </panel>
-  </row>
-  
-  <row>
-    <panel>
-      <title>Top Threat Types</title>
-      <table>
-        <search>
-          <query>index=security | stats count by threat_type | sort - count</query>
-          <earliest>-24h</earliest>
-          <latest>now</latest>
-        </search>
-      </table>
-    </panel>
-  </row>
-  
-  <row>
-    <panel>
-      <title>Alert Status</title>
-      <single>
-        <search>
-          <query>index=security severity=high | stats count</query>
-          <earliest>-1h</earliest>
-          <latest>now</latest>
-        </search>
-      </single>
-    </panel>
-  </row>
-</form>
-```
-
-## Alert Actions Configuration
-
-### Email Alerts
-
-```ini
-[email_alert_action]
-disabled = false
-action.email = 1
-action.email.to = security-team@company.com
-action.email.subject = SOC Alert: $result.alert_name$
-action.email.sendresults = 1
-action.email.format = html
-```
-
-### Webhook Alerts (Slack)
-
-```ini
-[webhook_alert_action]
-disabled = false
-action.webhook = 1
-action.webhook.url = https://hooks.slack.com/services/YOUR/WEBHOOK
-action.webhook.payload = {"text":"Alert: $result.alert_name$","severity":"$result.severity$"}
-```
-
-## Index Configuration
-
-### Creating a Custom Index
-
-**File**: `splunk/apps/soc_lab/default/inputs.conf`
-
-```ini
-[security_index]
-disabled = false
-datatype = event
-coldPath = $SPLUNK_DB/security/colddb
-homePath = $SPLUNK_DB/security/db
-thawedPath = $SPLUNK_DB/security/thaweddb
-maxConcurrentOptimizes = 3
-maxDataMB = 500
-maxHotBuckets = 10
-maxMemMB = 20
-maxTimeUnreachableBuckets = 2
-```
-
-## Performance Tuning
-
-### Optimize Search Performance
-
-```spl
-# Good: Uses index restriction and earliest time
-index=security earliest=-24h@h latest=now severity=high | stats count by user
-
-# Bad: No index, no time restriction, full table scan
-* | search security AND high | table *
-```
-
-### Batch Searches for Large Data
-
-```python
-# Instead of one big search
-search = "index=security | stats count by user"
-
-# Use batch search for better performance
-import splunklib.client as client
-service = client.connect(host='localhost', port=8089, username='admin', password='password')
-job = service.jobs.create(search, mode='normal')
-```
-
-## Custom Field Configuration
-
-### Add Custom Fields
-
-**In props.conf**:
-```ini
-[windows_events]
-EVAL-event_category = case(
-    EventID >= 4600 AND EventID < 4700, "Account",
-    EventID >= 4700 AND EventID < 4800, "Policy",
-    EventID >= 4800 AND EventID < 4900, "Detailed",
-    1=1, "Other"
-)
-
-EVAL-is_critical = if(severity="critical", 1, 0)
-
-EVAL-days_old = round((now()-_time)/86400)
-```
-
-## Advanced Configuration
-
-### Correlation Rules
-
-Detect complex attack patterns:
-
-```spl
-index=security 
-| stats count as failed_logins by src_ip, user 
-| where failed_logins > 10 
-| join src_ip 
-  [search index=security EventID=4672 
-   | stats count as privesc by src_ip]
-| where privesc > 0 
-| eval correlation_score=failed_logins+privesc
-```
-
-### Anomaly Detection
-
-```spl
-index=security 
-| stats count by user, date_hour 
-| stats avg(count) as baseline, stdev(count) as std by user 
-| where count > baseline + (2*std)
-```
-
-### Lookups Configuration
-
-**lookups.conf**:
-```ini
-[internal_ips]
-filename = internal_ips.csv
-match_type = WILDCARD(ip)
-
-[known_bad_domains]
-filename = known_bad_domains.csv
-match_type = WILDCARD(domain)
-```
-
-## Regular Maintenance
-
-### Daily Tasks
-- Monitor alert trigger rates
-- Check index size growth
-- Review failed searches
-
-### Weekly Tasks
-- Tune slow searches
-- Update detection rules
-- Review false positives
-
-### Monthly Tasks
-- Analyze trends
-- Optimize indexes
-- Update sample data
-- Test disaster recovery
-
----
-
-**Configuration Guide Version**: 1.0  
-**Last Updated**: 2026-03-10
+CI enforces tests and the medium/high security scan, validates Compose, builds the
+generator, and runs a live Splunk integration check. Tests mock external services;
+`verify-lab.py` supplies the separate live check.

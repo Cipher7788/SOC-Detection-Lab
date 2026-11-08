@@ -1,183 +1,66 @@
-# 🚀 Quick Start Guide
+# Quick start
 
-Get your SOC Detection Lab up and running in 5 minutes!
+Install Docker Engine/Desktop with Compose. Allow at least 4 GB RAM for Splunk
+and keep ports 8000, 8088, 8089, 9997 and 5514 available on localhost.
 
-## Prerequisites Checklist
+## Start
 
-- [ ] Docker installed (v20.10+)
-- [ ] Docker Compose installed (v1.29+)
-- [ ] 8GB RAM available
-- [ ] 30GB free disk space
-- [ ] Ports available: 8000, 8088, 9997, 514
-
-## 1️⃣ Clone & Setup (2 minutes)
+On Linux, macOS or Git Bash:
 
 ```bash
-# Clone the repository
-git clone https://github.com/Cipher7788/SOC-Detection-Lab.git
-cd SOC-Detection-Lab
-
-# Make scripts executable
-chmod +x scripts/*.sh
+bash scripts/setup.sh
 ```
 
-## 2️⃣ Start Splunk (1 minute)
+The script creates random credentials in `.env`, builds the generator, starts
+Splunk, and checks the generator's exit status. Docker is the only prerequisite.
 
-```bash
-# Start all services
-docker-compose up -d
+On PowerShell, or to configure credentials yourself:
 
-# Watch startup logs
-docker logs -f splunk-soc-lab
+```powershell
+Copy-Item .env.example .env
+# Edit .env to choose your password and UUID HEC token.
+docker compose up -d --build
+docker compose logs -f data-generator
 ```
 
-**Wait for**: "Splunk is ready to accept logins"
+The one-shot generator exits with status 0 after sending 200 events. Splunk can
+take several minutes to initialize. Open http://localhost:8000 and sign in as
+`admin` using `SPLUNK_PASSWORD` from `.env`. Select the **SOC Detection Lab** app.
+The official Docker image provisions the same HEC token automatically.
 
-## 3️⃣ Initial Login (1 minute)
-
-1. Open browser: **http://localhost:8000**
-2. Login with:
-   - Username: `admin`
-   - Password: `SocLab@2026`
-3. Accept the license agreement
-
-## 4️⃣ Generate Sample Data (1 minute)
-
-```bash
-# Generate realistic security events
-python3 scripts/generate-sample-data.py
-
-# Or run specific scenario
-python3 scripts/generate-sample-data.py --scenario brute-force
-```
-
-## 5️⃣ Ingest Data (automated)
-
-Data will be automatically ingested into Splunk. Check:
-
-```bash
-# Verify data ingestion
-python3 scripts/ingest-data.py --verify
-```
-
-## ✅ Lab is Ready!
-
-Access your dashboards:
-
-### 🔍 Key Features to Explore
-
-**In Splunk Web:**
-1. **Search & Reporting** → Run detection queries
-2. **Dashboards** → View threat insights
-3. **Alerts** → Monitor active threats
-4. **Settings** → Manage inputs and outputs
-
-### 📊 Sample Searches
-
-Search for security events:
 ```spl
-index=security | stats count by event_type
+index=security earliest=-15m | stats count by event_type
 ```
 
-Find suspicious activity:
-```spl
-index=security severity=high | timeline
-```
+## Verify
 
-Analyze user behavior:
-```spl
-index=security user=* | stats count by user
-```
-
-## 🎬 Run an Attack Scenario
+With Python 3.11+ installed:
 
 ```bash
-# Simulate brute force
-python3 scripts/generate-sample-data.py --scenario brute-force
-
-# Simulate ransomware
-python3 scripts/generate-sample-data.py --scenario ransomware
-
-# Simulate data exfiltration
-python3 scripts/generate-sample-data.py --scenario exfiltration
+python3 -m pip install -r requirements.txt
+python3 scripts/verify-lab.py --insecure
 ```
 
-Then search in Splunk for the generated events!
+`--insecure` is needed only for the local management API's self-signed certificate.
+The verifier checks HEC health, the app, indexes, dashboard and recent data.
+If indexing is still catching up, rerun it after a few seconds.
 
-## 🛑 Stop the Lab
+## Generate more data
 
 ```bash
-# Stop services (keeps data)
-docker-compose down
-
-# Full reset (removes all data)
-./scripts/cleanup.sh
+docker compose run --rm data-generator python3 /scripts/generate-sample-data.py \
+  --scenario brute-force --events 50 --send-hec
 ```
 
-## 🔧 Common Commands
+Replace `brute-force` with `privilege-escalation`, `lateral-movement`,
+`data-exfiltration` or `malware`. Events are placed in the most recent five
+minutes so the scheduled detections can see them immediately.
+
+## Stop
 
 ```bash
-# View logs
-docker logs -f splunk-soc-lab
-
-# Restart Splunk
-docker-compose restart splunk
-
-# Check container status
-docker-compose ps
-
-# Shell into container
-docker exec -it splunk-soc-lab /bin/bash
-
-# View configuration
-docker exec splunk-soc-lab cat /opt/splunk/etc/apps/soc_lab/default/inputs.conf
+docker compose down
 ```
 
-## 🆘 Troubleshooting
-
-**Splunk won't start?**
-```bash
-# Check logs for errors
-docker logs splunk-soc-lab
-
-# Increase memory and restart
-docker-compose down
-docker-compose up -d
-```
-
-**Can't access Splunk web?**
-- Wait 2-3 minutes after startup
-- Check: http://localhost:8000 (not https)
-- Try: docker restart splunk-soc-lab
-
-**No data showing?**
-```bash
-# Check data ingestion status
-docker logs soc-data-generator
-
-# Manually check indexes
-docker exec splunk-soc-lab splunk list index -auth admin:SocLab@2026
-```
-
-## 📚 Next Steps
-
-1. **[Read Full Documentation](ARCHITECTURE.md)**
-2. **[Run Incident Scenarios](SCENARIOS.md)**
-3. **[Configure Detection Rules](CONFIGURATION.md)**
-4. **[Troubleshooting Guide](TROUBLESHOOTING.md)**
-
-## 🎓 Learning Objectives
-
-After completing this quick start, you'll:
-✅ Understand SIEM basics with Splunk
-✅ Ingest security event data
-✅ Search and analyze logs
-✅ Create detection rules
-✅ Build dashboards
-✅ Respond to incidents
-
----
-
-**Estimated Setup Time**: 5 minutes  
-**First Time Setup**: 15 minutes  
-**Ready to Learn**: Let's go! 🚀
+Named volumes preserve indexed data and Splunk state. `docker compose down -v`
+deletes that data and should be used only when you intend to reset the lab.

@@ -24,7 +24,7 @@ jobs:
         run: pip install flake8 mypy types-requests
 
       - name: Python syntax check
-        run: python3 -m py_compile scripts/generate-sample-data.py scripts/ingest-to-hec.py
+        run: python3 -m compileall -q scripts
 
       - name: Flake8 (style + errors)
         run: |
@@ -36,7 +36,6 @@ jobs:
       - name: Shell syntax check
         run: |
           bash -n scripts/setup.sh
-          bash -n splunk/init/setup.sh
 
       - name: Validate JSON detection rules
         run: |
@@ -46,14 +45,14 @@ jobs:
 
       - name: Validate docker-compose.yml
         run: |
-          pip install -q pyyaml
-          python3 -c "import yaml; yaml.safe_load(open('docker-compose.yml')); print('docker-compose.yml OK')"
+          cp .env.example .env
+          docker compose config --quiet
 
       - name: Validate Splunk XML dashboards
         run: |
           python3 -c "
           import xml.etree.ElementTree as ET, glob
-          for f in glob.glob('splunk/apps/soc_lab/dashboards/*.xml'):
+          for f in glob.glob('splunk/apps/soc_lab/default/data/ui/views/*.xml'):
               ET.parse(f)
               print('OK:', f)
           "
@@ -72,10 +71,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install test dependencies
-        run: pip install pytest pytest-cov requests
+        run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest tests/ -v --cov=scripts --cov-report=term-missing || true
+        run: pytest tests/ -v --cov=scripts --cov-report=term-missing
 
       - name: Smoke-test data generator (all scenarios)
         run: |
@@ -128,7 +127,7 @@ jobs:
             --severity-level medium \
             --confidence-level medium \
             --format txt \
-            --exclude tests/ || true
+            --exclude tests/
 
       - name: Check for hardcoded secrets
         run: |
@@ -156,3 +155,37 @@ jobs:
           docker run --rm soc-data-generator:ci \
             python3 /scripts/generate-sample-data.py --events 5 --output /tmp/ci-test.json
           echo "Container run OK"
+
+  integration:
+    name: Live Splunk Integration
+    runs-on: ubuntu-latest
+    needs: [test, docker]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Start and ingest
+        run: |
+          cp .env.example .env
+          docker compose up -d --build
+          docker compose wait data-generator
+          for scenario in brute-force privilege-escalation lateral-movement data-exfiltration malware; do
+            docker compose run --rm data-generator python3 /scripts/generate-sample-data.py \
+              --scenario "$scenario" --events 50 --send-hec
+          done
+      - name: Verify live configuration and indexed data
+        run: |
+          for attempt in {1..12}; do
+            python3 scripts/verify-lab.py --insecure --detections && exit 0
+            sleep 5
+          done
+          exit 1
+      - name: Logs
+        if: always()
+        run: docker compose logs --no-color
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

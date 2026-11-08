@@ -9,9 +9,18 @@
     "sub_technique": "T1110.001"
   },
   "detection": {
-    "event_types": ["authentication_failure", "login_failure"],
-    "windows_event_ids": [4625, 4771],
-    "linux_log_patterns": ["Failed password", "authentication failure"],
+    "event_types": [
+      "authentication_failure",
+      "login_failure"
+    ],
+    "windows_event_ids": [
+      4625,
+      4771
+    ],
+    "linux_log_patterns": [
+      "Failed password",
+      "authentication failure"
+    ],
     "threshold": {
       "count": 5,
       "time_frame": "10m",
@@ -31,7 +40,7 @@
       }
     ]
   },
-  "splunk_query": "index=security (EventID=4625 OR EventID=4771) | stats count by src_ip, user | where count >= 5 | sort -count",
+  "splunk_query": "index=security (EventID=4625 OR EventID=4771) | stats count as failed_logins by src_ip, user | where failed_logins >= 5 | eval severity=\"high\", rule_name=\"Brute Force Detected\" | sort -failed_logins",
   "response_actions": [
     {
       "action": "alert",
