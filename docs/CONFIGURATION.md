@@ -7,6 +7,17 @@ Compose requires `SPLUNK_PASSWORD` and `SPLUNK_HEC_TOKEN` from `.env`.
 Existing `.env` files are preserved by setup. Existing Splunk volumes may retain
 the previous admin password; changing the environment does not reset it.
 
+Make does not parse or source `.env`. The `ingest`, `ingest-all` and `notify`
+targets use `scripts/run-with-env.py` to parse dotenv quotes and comments without
+expanding `$name` or `${name}`, or executing shell expressions. Install
+`requirements.txt` before using these host Python targets. Existing shell
+environment variables take precedence over `.env`. Legacy Make arguments
+`HEC_URL=...`, `HEC_TOKEN=...` and `W=...` take precedence over both; use shell
+single quotes around arguments containing dollar signs. Credentials travel in
+the child environment, rather than being inserted into the shell command.
+Docker Compose continues to parse `.env` itself; single-quote literal dollar
+signs in Compose credentials to prevent Compose's own interpolation.
+
 The official Splunk image reads `splunk/defaults.yml` and provisions HEC using
 `SPLUNK_HEC_TOKEN`. HEC uses HTTP on port 8088 inside this local lab; published
 ports bind to localhost. Compose includes the license and general-terms startup
