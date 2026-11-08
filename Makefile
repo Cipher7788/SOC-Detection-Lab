@@ -3,15 +3,17 @@
 # Convenience targets for common lab operations
 # =============================================================================
 
--include .env
-export SPLUNK_HEC_TOKEN SPLUNK_PASSWORD ALERT_WEBHOOK_URL
-
 PYTHON     := python3
 PIP        := pip3
 COMPOSE    := $(shell command -v docker-compose 2>/dev/null || echo "docker compose")
-HEC_URL    ?= http://localhost:8088
-HEC_TOKEN  ?= $(SPLUNK_HEC_TOKEN)
-W          ?= $(ALERT_WEBHOOK_URL)
+ENV_RUN    = $(PYTHON) scripts/run-with-env.py
+
+# Read dotenv in Python, never as Make syntax or shell code. Preserve legacy
+# command-line aliases without expanding dollar signs or exposing secrets in argv.
+export SOC_LAB_HEC_URL := $(value HEC_URL)
+export SOC_LAB_HEC_TOKEN := $(value HEC_TOKEN)
+export SOC_LAB_WEBHOOK_URL := $(value W)
+unexport HEC_URL HEC_TOKEN W
 
 .PHONY: help setup up down logs test lint security clean generate ingest notify
 
@@ -100,25 +102,22 @@ scenario:
 
 ingest:
 	@echo "[*] Ingesting events into Splunk HEC..."
-	$(PYTHON) scripts/ingest-to-hec.py \
-		--file data-sources/logs/generated-events.json \
-		--hec-url $(HEC_URL) \
-		--hec-token "$(HEC_TOKEN)"
+	$(ENV_RUN) $(PYTHON) scripts/ingest-to-hec.py \
+		--file data-sources/logs/generated-events.json
 
 ingest-all:
 	@echo "[*] Generating and ingesting all 5 scenarios..."
 	@set -e; for s in brute-force privilege-escalation lateral-movement data-exfiltration malware; do \
-		$(PYTHON) scripts/generate-sample-data.py \
+		$(ENV_RUN) $(PYTHON) scripts/generate-sample-data.py \
 			--scenario $$s --events 50 \
-			--send-hec --hec-url $(HEC_URL) --hec-token "$(HEC_TOKEN)"; \
+			--send-hec; \
 	done
 
 # ── Notifications ─────────────────────────────────────────────────────────────
 # Usage: make notify P=slack W=https://... A="Brute Force" SEV=high
 notify:
-	$(PYTHON) scripts/notify-webhook.py \
+	$(ENV_RUN) $(PYTHON) scripts/notify-webhook.py \
 		--provider $(P) \
-		$(if $(W),--webhook-url "$(W)",) \
 		--alert-name "$(A)" \
 		--severity $(SEV)
 
