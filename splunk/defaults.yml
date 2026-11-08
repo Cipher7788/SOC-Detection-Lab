@@ -1,0 +1,6 @@
+# The official image provisions HEC using SPLUNK_HEC_TOKEN.
+splunk:
+  hec:
+    enable: true
+    ssl: false
+    port: 8088

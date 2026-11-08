@@ -11,7 +11,7 @@ git clone https://github.com/Cipher7788/SOC-Detection-Lab.git
 cd SOC-Detection-Lab
 
 # Install dev dependencies
-pip install pytest pytest-cov flake8 bandit requests
+pip install -r requirements-dev.txt
 
 # Run all tests
 make test
@@ -29,7 +29,7 @@ make lint
 | `detection-rules/` | JSON detection rule definitions |
 | `scripts/` | Python/Bash automation scripts |
 | `splunk/apps/soc_lab/default/` | Splunk app `.conf` files |
-| `splunk/apps/soc_lab/dashboards/` | Splunk XML dashboards |
+| `splunk/apps/soc_lab/default/data/ui/views/` | Splunk XML dashboards |
 | `splunk/lookups/` | CSV enrichment lookup tables |
 | `tests/` | Pytest unit tests |
 | `docs/` | Extended documentation |
@@ -95,7 +95,7 @@ make lint
 ## Code Style
 
 - Python: follow PEP 8, max line length 120
-- Use `Optional[X]` not `X | None` for Python 3.8 compatibility
+- Target Python 3.11 or newer
 - All scripts must pass `flake8` and `bash -n` (for shell scripts)
 - No hardcoded secrets — use environment variables or `.env`
 
@@ -103,7 +103,7 @@ make lint
 
 ## Pull Request Checklist
 
-- [ ] All 118+ tests pass (`make test`)
+- [ ] All tests pass (`make test`)
 - [ ] Lint passes (`make lint`)
 - [ ] No `.env` file committed
 - [ ] PR description explains what and why

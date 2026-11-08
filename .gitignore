@@ -31,6 +31,8 @@ sample_security_events.json
 # ── Splunk runtime data (Docker volumes) ─────────────────────────────────────
 splunk/var/
 splunk/etc/
+splunk/apps/soc_lab/local/
+splunk/apps/soc_lab/metadata/local.meta
 
 # ── OS artefacts ──────────────────────────────────────────────────────────────
 .DS_Store

@@ -335,31 +335,10 @@ def random_events(start: datetime, n: int) -> List[dict]:
 
 # ─── HEC sender (optional) ────────────────────────────────────────────────────
 
-def send_to_hec(events: List[dict], hec_url: str, hec_token: str) -> None:
-    """Send events to Splunk HTTP Event Collector."""
-    try:
-        import requests  # type: ignore
-    except ImportError:
-        print("[!] 'requests' not installed. Run: pip3 install requests", file=sys.stderr)
-        sys.exit(1)
-
-    headers = {"Authorization": f"Splunk {hec_token}"}
-    endpoint = hec_url.rstrip("/") + "/services/collector"
-
-    batch: List[dict] = []
-    for ev in events:
-        batch.append({"time": ev["timestamp"], "sourcetype": "json", "event": ev})
-
-    # Send in chunks of 100
-    chunk_size = 100
-    for i in range(0, len(batch), chunk_size):
-        chunk = batch[i : i + chunk_size]
-        payload = "\n".join(json.dumps(e) for e in chunk)
-        resp = requests.post(endpoint, data=payload, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            print(f"[!] HEC returned {resp.status_code}: {resp.text}", file=sys.stderr)
-        else:
-            print(f"[+] Sent {len(chunk)} events to HEC ({i + len(chunk)}/{len(events)})")
+def send_to_hec(events: List[dict], hec_url: str, hec_token: str) -> bool:
+    """Send events using the shared, validated HEC client."""
+    from hec_client import send_events
+    return send_events(events, hec_url, hec_token)
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -413,7 +392,12 @@ def parse_args() -> argparse.Namespace:
         metavar="TOKEN",
         help="Splunk HEC token (default: $SPLUNK_HEC_TOKEN)",
     )
-    return parser.parse_args()
+    parser.add_argument("--format", choices=["json", "jsonl"], default="json",
+                        help="Use jsonl for Splunk file monitoring")
+    args = parser.parse_args()
+    if args.events < 1:
+        parser.error("--events must be positive")
+    return args
 
 
 def main() -> int:
@@ -431,6 +415,12 @@ def main() -> int:
 
     events = generator(start_time, args.events)
 
+    # Fit every scenario into the recent five-minute window. Long scenarios
+    # previously produced future events and missed short scheduled searches.
+    end_time = datetime.now(tz=timezone.utc) - timedelta(seconds=1)
+    for i, event in enumerate(events):
+        event["timestamp"] = _ts(end_time - timedelta(seconds=299 * (len(events) - 1 - i) / max(1, len(events) - 1)))
+
     # Sort chronologically
     events.sort(key=lambda e: e["timestamp"])
 
@@ -438,11 +428,18 @@ def main() -> int:
         if not args.hec_token:
             print("[!] --hec-token or $SPLUNK_HEC_TOKEN is required for --send-hec", file=sys.stderr)
             return 1
-        send_to_hec(events, args.hec_url, args.hec_token)
+        if not send_to_hec(events, args.hec_url, args.hec_token):
+            return 1
     else:
         try:
+            from pathlib import Path
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
             with open(args.output, "w", encoding="utf-8") as fh:
-                json.dump(events, fh, indent=args.indent)
+                if args.format == "jsonl":
+                    for event in events:
+                        fh.write(json.dumps(event) + "\n")
+                else:
+                    json.dump(events, fh, indent=args.indent)
             print(f"[+] {len(events)} events written to {args.output}")
         except OSError as exc:
             print(f"[!] Failed to write output file: {exc}", file=sys.stderr)

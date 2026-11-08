@@ -9,15 +9,28 @@
     "sub_technique": "T1078.002"
   },
   "detection": {
-    "event_types": ["privilege_use", "account_change", "token_manipulation"],
-    "windows_event_ids": [4656, 4672, 4673, 4674, 4688, 4728, 4732, 4756],
+    "event_types": [
+      "privilege_use",
+      "account_change",
+      "token_manipulation"
+    ],
+    "windows_event_ids": [
+      4656,
+      4672,
+      4673,
+      4674,
+      4688,
+      4728,
+      4732,
+      4756
+    ],
     "rules": [
       {
         "id": "priv_esc_1",
         "description": "Sensitive privilege assigned to new logon (SeDebugPrivilege)",
         "condition": {
           "EventID": "4672",
-          "Privilege": "SeDebugPrivilege"
+          "privilege": "SeDebugPrivilege"
         },
         "severity": "critical"
       },
@@ -26,7 +39,7 @@
         "description": "Act as part of operating system privilege used (SeTcbPrivilege)",
         "condition": {
           "EventID": "4672",
-          "Privilege": "SeTcbPrivilege"
+          "privilege": "SeTcbPrivilege"
         },
         "severity": "critical"
       },
@@ -34,8 +47,16 @@
         "id": "priv_esc_3",
         "description": "User added to privileged group (Domain Admins / Administrators)",
         "condition": {
-          "EventID": ["4728", "4732", "4756"],
-          "TargetGroup": ["Domain Admins", "Administrators", "Enterprise Admins"]
+          "EventID": [
+            "4728",
+            "4732",
+            "4756"
+          ],
+          "TargetGroup": [
+            "Domain Admins",
+            "Administrators",
+            "Enterprise Admins"
+          ]
         },
         "severity": "high"
       },
@@ -50,7 +71,7 @@
       }
     ]
   },
-  "splunk_query": "index=security (EventID=4672 OR EventID=4673 OR EventID=4728 OR EventID=4732) | table _time, user, Privilege, TargetUserName, TargetDomainName | sort -_time",
+  "splunk_query": "index=security (EventID=4672 OR EventID=4673 OR EventID=4728 OR EventID=4732) | table _time, user, privilege, logon_id, host | sort -_time",
   "response_actions": [
     {
       "action": "alert",

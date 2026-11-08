@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 SPLUNK_DEFAULT = Path(__file__).parent.parent / "splunk/apps/soc_lab/default"
-SPLUNK_DASHBOARDS = Path(__file__).parent.parent / "splunk/apps/soc_lab/dashboards"
+SPLUNK_DASHBOARDS = Path(__file__).parent.parent / "splunk/apps/soc_lab/default/data/ui/views"
 
 
 def load_conf(filename: str) -> configparser.ConfigParser:
@@ -26,15 +26,15 @@ class TestInputsConf:
     def test_file_exists(self):
         assert (SPLUNK_DEFAULT / "inputs.conf").exists()
 
-    def test_hec_stanza_present(self):
-        cp = load_conf("inputs.conf")
-        # ConfigParser lowercases section names
-        sections = [s.lower() for s in cp.sections()]
-        assert any("http" in s for s in sections), "HEC http stanza missing"
-
-    def test_contains_port_8088(self):
+    def test_hec_managed_by_official_image(self):
         content = (SPLUNK_DEFAULT / "inputs.conf").read_text()
-        assert "8088" in content
+        assert "REPLACE_WITH_HEC_TOKEN" not in content
+        assert "[http://" not in content
+
+    def test_hec_defaults(self):
+        import yaml
+        defaults = yaml.safe_load((SPLUNK_DEFAULT.parents[2] / "defaults.yml").read_text())
+        assert defaults["splunk"]["hec"] == {"enable": True, "ssl": False, "port": 8088}
 
 
 class TestPropsConf:
@@ -83,9 +83,10 @@ class TestSavedSearchesConf:
         content = (SPLUNK_DEFAULT / "savedsearches.conf").read_text()
         assert content.count("cron_schedule") >= 5
 
-    def test_all_alerts_have_email_action(self):
+    def test_alerts_have_no_placeholder_destinations(self):
         content = (SPLUNK_DEFAULT / "savedsearches.conf").read_text()
-        assert "action.email.to" in content
+        assert "security@company.com" not in content
+        assert "REPLACE/YOUR/WEBHOOK" not in content
 
     def test_all_alerts_enabled(self):
         content = (SPLUNK_DEFAULT / "savedsearches.conf").read_text()

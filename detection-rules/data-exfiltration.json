@@ -9,7 +9,12 @@
     "sub_technique": "T1048.003"
   },
   "detection": {
-    "event_types": ["network_connection", "file_access", "dns_query", "http_request"],
+    "event_types": [
+      "network_connection",
+      "file_access",
+      "dns_query",
+      "http_request"
+    ],
     "rules": [
       {
         "id": "exfil_1",
@@ -29,7 +34,12 @@
           "direction": "outbound",
           "bytes_transferred": 104857600,
           "destination": "external",
-          "protocol": ["HTTP", "HTTPS", "FTP", "SFTP"]
+          "protocol": [
+            "HTTP",
+            "HTTPS",
+            "FTP",
+            "SFTP"
+          ]
         },
         "severity": "critical"
       },
@@ -37,7 +47,13 @@
         "id": "exfil_3",
         "description": "Sensitive file accessed by non-privileged user",
         "condition": {
-          "file_path_contains": ["/finance/", "/hr/", "/confidential/", "PII", "passwords"],
+          "file_path_contains": [
+            "/finance/",
+            "/hr/",
+            "/confidential/",
+            "PII",
+            "passwords"
+          ],
           "user_role": "standard",
           "time_window": "30m"
         },
@@ -50,7 +66,11 @@
           "dns_query_length": 100,
           "dns_query_frequency": 50,
           "time_window": "1m",
-          "unusual_record_types": ["TXT", "NULL", "CNAME"]
+          "unusual_record_types": [
+            "TXT",
+            "NULL",
+            "CNAME"
+          ]
         },
         "severity": "critical"
       },
@@ -58,15 +78,25 @@
         "id": "exfil_5",
         "description": "Data staged in temp or user directories before exfil",
         "condition": {
-          "file_path_contains": ["C:\\Users\\", "C:\\Temp\\", "/tmp/", "/var/tmp/"],
-          "file_extension": [".zip", ".rar", ".7z", ".tar.gz"],
+          "file_path_contains": [
+            "C:\\Users\\",
+            "C:\\Temp\\",
+            "/tmp/",
+            "/var/tmp/"
+          ],
+          "file_extension": [
+            ".zip",
+            ".rar",
+            ".7z",
+            ".tar.gz"
+          ],
           "time_window": "2h"
         },
         "severity": "high"
       }
     ]
   },
-  "splunk_query": "index=network dest_ip!=10.0.0.0/8 dest_ip!=192.168.0.0/16 dest_ip!=172.16.0.0/12 | stats sum(bytes_out) as total_bytes by src_ip, dest_ip | where total_bytes > 104857600 | sort -total_bytes",
+  "splunk_query": "(index=security OR index=network) event_type=network_connection dest_ip!=10.0.0.0/8 dest_ip!=192.168.0.0/16 dest_ip!=172.16.0.0/12 | stats sum(bytes_out) as total_bytes by src_ip, dest_ip | where total_bytes > 104857600 | eval severity=\"critical\", total_mb=round(total_bytes/1048576,2) | sort -total_bytes",
   "response_actions": [
     {
       "action": "alert",

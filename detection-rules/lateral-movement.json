@@ -9,15 +9,31 @@
     "sub_technique": "T1021.002"
   },
   "detection": {
-    "event_types": ["process_creation", "network_connection", "remote_service"],
-    "windows_event_ids": [4624, 4648, 4688, 4769, 7045],
+    "event_types": [
+      "process_creation",
+      "network_connection",
+      "remote_service"
+    ],
+    "windows_event_ids": [
+      4624,
+      4648,
+      4688,
+      4769,
+      7045
+    ],
     "rules": [
       {
         "id": "lateral_move_1",
         "description": "Suspicious lateral movement tool executed",
         "condition": {
           "EventID": "4688",
-          "process_name": ["psexec.exe", "psexesvc.exe", "wmic.exe", "winrs.exe", "at.exe"]
+          "process_name": [
+            "psexec.exe",
+            "psexesvc.exe",
+            "wmic.exe",
+            "winrs.exe",
+            "at.exe"
+          ]
         },
         "severity": "high"
       },
@@ -27,7 +43,12 @@
         "condition": {
           "EventID": "4688",
           "process_name": "powershell.exe",
-          "command_line_contains": ["Enter-PSSession", "Invoke-Command", "-ComputerName", "New-PSSession"]
+          "command_line_contains": [
+            "Enter-PSSession",
+            "Invoke-Command",
+            "-ComputerName",
+            "New-PSSession"
+          ]
         },
         "severity": "high"
       },
@@ -52,15 +73,26 @@
       }
     ],
     "network_indicators": {
-      "ports": [135, 139, 445, 3389, 5985, 5986],
-      "protocols": ["SMB", "RDP", "WinRM"],
+      "ports": [
+        135,
+        139,
+        445,
+        3389,
+        5985,
+        5986
+      ],
+      "protocols": [
+        "SMB",
+        "RDP",
+        "WinRM"
+      ],
       "threshold": {
         "unique_destinations": 5,
         "time_frame": "30m"
       }
     }
   },
-  "splunk_query": "index=security EventID=4688 process_name IN (\"psexec.exe\",\"wmic.exe\",\"winrs.exe\",\"powershell.exe\") | table _time, host, user, process_name, cmdline | sort -_time",
+  "splunk_query": "index=security EventID=4688 process_name IN (\"psexec.exe\",\"wmic.exe\",\"winrs.exe\",\"powershell.exe\",\"at.exe\") | table _time, host, user, process_name, cmdline | sort -_time",
   "response_actions": [
     {
       "action": "alert",
