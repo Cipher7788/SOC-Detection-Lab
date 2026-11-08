@@ -179,7 +179,7 @@ jobs:
       - name: Verify live configuration and indexed data
         run: |
           for attempt in {1..12}; do
-            python3 scripts/verify-lab.py --insecure --detections && exit 0
+            python3 scripts/verify-lab.py --insecure --detections --min-events 450 && exit 0
             sleep 5
           done
           exit 1

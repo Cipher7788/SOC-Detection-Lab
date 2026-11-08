@@ -11,6 +11,7 @@ PIP        := pip3
 COMPOSE    := $(shell command -v docker-compose 2>/dev/null || echo "docker compose")
 HEC_URL    ?= http://localhost:8088
 HEC_TOKEN  ?= $(SPLUNK_HEC_TOKEN)
+W          ?= $(ALERT_WEBHOOK_URL)
 
 .PHONY: help setup up down logs test lint security clean generate ingest notify
 
@@ -117,7 +118,7 @@ ingest-all:
 notify:
 	$(PYTHON) scripts/notify-webhook.py \
 		--provider $(P) \
-		--webhook-url $(W) \
+		$(if $(W),--webhook-url "$(W)",) \
 		--alert-name "$(A)" \
 		--severity $(SEV)
 
@@ -125,6 +126,7 @@ notify:
 clean:
 	@echo "[*] Removing generated data..."
 	rm -f data-sources/logs/*.json
+	rm -f data-sources/logs/*.jsonl
 	rm -f data-sources/network/*.csv
 	rm -f data-sources/windows/*.csv
 	rm -f output/*

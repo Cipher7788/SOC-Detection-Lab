@@ -12,6 +12,24 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
+def export_results(response):
+    """Reject Splunk search errors even when HTTP succeeds or partial rows exist."""
+    response.raise_for_status()
+    results = []
+    for line in response.text.splitlines():
+        if not line:
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise ValueError("Invalid Splunk export response")
+        for message in row.get("messages", []):
+            if message.get("type", "").upper() in {"ERROR", "FATAL"}:
+                raise ValueError(message.get("text", "Splunk search failed"))
+        if "result" in row:
+            results.append(row["result"])
+    return results
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--management-url", default="https://localhost:8089")
@@ -19,7 +37,10 @@ def main() -> int:
     parser.add_argument("--env-file", type=Path, default=Path(".env"))
     parser.add_argument("--insecure", action="store_true", help="Accept the local Splunk self-signed certificate")
     parser.add_argument("--detections", action="store_true", help="Require results from all five seeded scenarios")
+    parser.add_argument("--min-events", type=int, default=1, help="Minimum recent indexed security events required")
     args = parser.parse_args()
+    if args.min_events < 1:
+        parser.error("--min-events must be positive")
     values = {}
     if args.env_file.exists():
         for line in args.env_file.read_text(encoding="utf-8").splitlines():
@@ -45,11 +66,10 @@ def main() -> int:
             "search": "search index=security earliest=-15m | stats count",
             "output_mode": "json",
         }, timeout=30)
-        response.raise_for_status()
-        rows = [json.loads(line) for line in response.text.splitlines() if line]
-        counts = [int(row["result"]["count"]) for row in rows if "result" in row]
-        if not counts or counts[-1] < 1:
-            print("FAIL: no recent security events (indexing may still be catching up)", file=sys.stderr)
+        counts = [int(row["count"]) for row in export_results(response)]
+        if not counts or counts[-1] < args.min_events:
+            print(f"FAIL: expected at least {args.min_events} recent events, found {counts[-1] if counts else 0} "
+                  "(indexing may still be catching up)", file=sys.stderr)
             return 1
         print(f"PASS: {counts[-1]} recent security events")
         if args.detections:
@@ -64,8 +84,7 @@ def main() -> int:
                     "search": "search " + query + " | head 1", "earliest_time": "-15m", "latest_time": "now",
                     "output_mode": "json",
                 }, timeout=30)
-                result.raise_for_status()
-                if not any("result" in json.loads(line) for line in result.text.splitlines() if line):
+                if not export_results(result):
                     print(f"FAIL: no results for {title}", file=sys.stderr)
                     return 1
                 print(f"PASS: {title}")
