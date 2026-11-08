@@ -18,5 +18,5 @@ SPL, plus descriptive detection ideas and response playbooks. Those descriptions
 are not a separate rule engine or automated firewall/endpoint response system.
 
 Named volumes persist Splunk configuration and indexed data. The source app and
-lookup mounts are read-only. App metadata shares searches and views and assigns
+lookup mounts are writable for image initialization and UI edits. App metadata shares searches and views and assigns
 scheduled-search ownership to admin. Email/webhook actions require configuration.

@@ -18,10 +18,10 @@ than forcing Free mode, which does not support scheduled alerting.
 `splunk/apps/soc_lab` mounts directly at `/opt/splunk/etc/apps/soc_lab`.
 `default/indexes.conf` creates `security`, `network` and `alerts` at startup.
 Views belong in `default/data/ui/views`; navigation is in `default/data/ui/nav`.
-Lookups mount inside the app's `lookups` directory. App source mounts read-only;
-edit tracked configuration on the host and restart Splunk to apply changes.
-For alert actions, edit the tracked saved searches, or use a separate writable
-deployment of the app if you need to save UI changes.
+Lookups mount inside the app's existing `lookups` directory. These app mounts are
+writable so the official image can manage ownership and Splunk can save UI edits
+under `local/`. Runtime local overrides are ignored by Git. Edit tracked defaults
+on the host and restart Splunk to apply changes; local overrides take precedence.
 
 ## Event ingestion
 

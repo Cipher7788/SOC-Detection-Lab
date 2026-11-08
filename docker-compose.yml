@@ -16,8 +16,8 @@ services:
     volumes:
       - splunk_etc:/opt/splunk/etc
       - splunk_var:/opt/splunk/var
-      - ./splunk/apps/soc_lab:/opt/splunk/etc/apps/soc_lab:ro
-      - ./splunk/lookups:/opt/splunk/etc/apps/soc_lab/lookups:ro
+      - ./splunk/apps/soc_lab:/opt/splunk/etc/apps/soc_lab
+      - ./splunk/lookups:/opt/splunk/etc/apps/soc_lab/lookups
       - ./splunk/defaults.yml:/tmp/defaults/default.yml:ro
       - ./data-sources:/data-sources:ro
     healthcheck:

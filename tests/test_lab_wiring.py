@@ -22,7 +22,8 @@ def test_compose_mount_sources_exist():
             source = mount.split(":")[0]
             if source.startswith("./"):
                 assert (ROOT / source).exists(), source
-    assert "./splunk/apps/soc_lab:/opt/splunk/etc/apps/soc_lab:ro" in compose["services"]["splunk"]["volumes"]
+    assert "./splunk/apps/soc_lab:/opt/splunk/etc/apps/soc_lab" in compose["services"]["splunk"]["volumes"]
+    assert (APP / "lookups").is_dir()
 
 
 def test_all_referenced_lookups_exist():
